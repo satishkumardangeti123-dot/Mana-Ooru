@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 import hashlib
+import secrets
 import requests
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
@@ -161,6 +162,10 @@ class ReactionBody(BaseModel):
     device_id: str
 
 
+class ReportBody(BaseModel):
+    device_id: str
+
+
 class BusinessEditLogin(BaseModel):
     code: str
 
@@ -280,9 +285,13 @@ async def seed_if_empty():
     if await db.updates.count_documents({}) == 0:
         await db.updates.insert_many([dict(x) for x in UPDATES_SEED])
         logger.info("Seeded %d updates", len(UPDATES_SEED))
-    # Backfill edit_code on any business missing it (6-digit derived from id hash)
+    # Backfill edit_code on any business missing it (random 8-char, unguessable)
     async for biz in db.businesses.find({"edit_code": {"$exists": False}}, PROJECTION):
-        code = f"{int(hashlib.sha1(biz['id'].encode()).hexdigest(), 16) % 1000000:06d}"
+        code = secrets.token_urlsafe(6)[:8].upper()
+        await db.businesses.update_one({"id": biz["id"]}, {"$set": {"edit_code": code}})
+    # Rotate any legacy deterministic 6-digit codes to random codes
+    async for biz in db.businesses.find({"edit_code": {"$regex": "^\\d{6}$"}}, PROJECTION):
+        code = secrets.token_urlsafe(6)[:8].upper()
         await db.businesses.update_one({"id": biz["id"]}, {"$set": {"edit_code": code}})
     # Indexes
     try:
@@ -294,6 +303,8 @@ async def seed_if_empty():
         await db.push_tokens.create_index("device_token", unique=True)
         await db.posts.create_index([("location_id", 1), ("posted_at", -1)])
         await db.biz_edit_tokens.create_index("expires_at", expireAfterSeconds=0)
+        await db.edit_login_attempts.create_index("at", expireAfterSeconds=3600)
+        await db.post_reports.create_index([("post_id", 1), ("device_id", 1)], unique=True)
     except Exception as e:
         logger.warning("index create: %s", e)
 
@@ -738,14 +749,17 @@ async def send_push(recipients: List[str], data: dict, idempotency_key: Optional
 
 @api_router.post("/register-push", status_code=201)
 async def register_push(body: RegisterPushBody, authorization: Optional[str] = Header(None)):
-    # Anonymous devices are allowed; if user is signed in, associate with them too.
+    # Identity: signed-in users bind by their user_id; anonymous devices bind by
+    # a stable hash of the device_token so a client cannot spoof someone else's id.
     u = await current_user(authorization)
-    signed_user_id = u["user_id"] if u else body.user_id
+    if u:
+        signed_user_id = u["user_id"]
+    else:
+        signed_user_id = "anon_" + hashlib.sha256(body.device_token.encode()).hexdigest()[:16]
     await db.push_tokens.update_one(
         {"device_token": body.device_token},
         {"$set": {
             "user_id": signed_user_id,
-            "location_id": None,  # optional; the client may PATCH later
             "platform": body.platform,
             "device_token": body.device_token,
             "updated_at": datetime.now(timezone.utc),
@@ -772,6 +786,11 @@ async def register_push(body: RegisterPushBody, authorization: Optional[str] = H
 
 @api_router.post("/push-tokens/{device_token}/location")
 async def set_token_location(device_token: str, body: dict):
+    # Deprecated: location is now set via /register-push. Kept for backward
+    # compatibility but requires the caller to know the exact device_token
+    # (unguessable from outside) and only updates the matching row.
+    if not device_token or len(device_token) < 16:
+        raise HTTPException(400, "invalid device token")
     await db.push_tokens.update_one(
         {"device_token": device_token},
         {"$set": {"location_id": body.get("location_id")}},
@@ -779,27 +798,7 @@ async def set_token_location(device_token: str, body: dict):
     return {"status": "ok"}
 
 
-@api_router.post("/announcements/broadcast")
-async def broadcast(body: BroadcastBody):
-    """Broadcast an announcement to all opted-in devices for a location."""
-    tokens = await db.push_tokens.find({"location_id": body.location_id}, PROJECTION).to_list(1000)
-    recipients = list({t["user_id"] for t in tokens if t.get("user_id")})
-    # Also persist the update
-    doc = {
-        "id": _uid(),
-        "location_id": body.location_id,
-        "title_en": body.title, "title_te": body.title,
-        "body_en": body.message, "body_te": body.message,
-        "posted_at": datetime.now(timezone.utc).isoformat(),
-        "tag_en": body.tag_en, "tag_te": body.tag_te,
-    }
-    await db.updates.insert_one(doc)
-    try:
-        if recipients:
-            await send_push(recipients, {"title": body.title, "message": body.message, "action_url": "/section/updates"})
-    except Exception as e:
-        logger.warning("broadcast push failed: %s", e)
-    return {"status": "ok", "recipients": len(recipients)}
+# public alias removed: broadcasts are admin-only (see /api/admin/announcements/broadcast)
 
 
 # ---------------- Uploads / files ----------------
@@ -824,6 +823,9 @@ async def upload_file(file: UploadFile = File(...), authorization: Optional[str]
 
 @api_router.get("/files/{path:path}")
 async def get_file(path: str):
+    # Only serve objects under our app's namespace; reject traversal and absolutes
+    if not path.startswith(f"{APP_NAME}/") or ".." in path.split("/") or path.startswith("/"):
+        raise HTTPException(404, "not found")
     try:
         content, ct = await run_in_threadpool(_sync_get, path)
     except HTTPException:
@@ -871,18 +873,30 @@ async def create_post(body: PostCreate, authorization: Optional[str] = Header(No
 
 
 @api_router.post("/posts/{post_id}/report")
-async def report_post(post_id: str):
-    res = await db.posts.find_one_and_update(
+async def report_post(post_id: str, body: ReportBody):
+    post = await db.posts.find_one({"id": post_id}, PROJECTION)
+    if not post:
+        raise HTTPException(404, "post not found")
+    # Dedup: one report per device per post
+    try:
+        await db.post_reports.insert_one({
+            "post_id": post_id,
+            "device_id": body.device_id,
+            "at": datetime.now(timezone.utc),
+        })
+    except Exception:
+        # Duplicate — already reported by this device
+        return {"status": "already_reported"}
+    updated = await db.posts.find_one_and_update(
         {"id": post_id},
-        {"$inc": {"reports": 1}, "$set": {"hidden_if": True}},
+        {"$inc": {"reports": 1}},
         return_document=True,
     )
-    if not res:
-        raise HTTPException(404, "post not found")
-    # Auto-hide after 5 reports
-    if (res.get("reports") or 0) + 1 >= 5:
+    reports_count = int((updated or {}).get("reports") or 0)
+    # Auto-hide after 5 unique reports
+    if reports_count >= 5:
         await db.posts.update_one({"id": post_id}, {"$set": {"hidden": True}})
-    return {"status": "ok"}
+    return {"status": "ok", "reports": reports_count}
 
 
 VALID_REACTIONS = {"pray", "heart", "alert"}
@@ -935,8 +949,15 @@ async def biz_edit_login(business_id: str, body: BusinessEditLogin):
     biz = await db.businesses.find_one({"id": business_id}, PROJECTION)
     if not biz:
         raise HTTPException(404, "business not found")
+    # Rate limit: max 5 failed attempts per business per hour
+    since = datetime.now(timezone.utc) - timedelta(hours=1)
+    fails = await db.edit_login_attempts.count_documents({"business_id": business_id, "at": {"$gte": since}, "ok": False})
+    if fails >= 5:
+        raise HTTPException(429, "too many attempts; try later")
     if str(biz.get("edit_code", "")).strip() != body.code.strip():
+        await db.edit_login_attempts.insert_one({"business_id": business_id, "at": datetime.now(timezone.utc), "ok": False})
         raise HTTPException(401, "invalid code")
+    await db.edit_login_attempts.insert_one({"business_id": business_id, "at": datetime.now(timezone.utc), "ok": True})
     token = uuid.uuid4().hex
     await db.biz_edit_tokens.insert_one({
         "token": token,
@@ -1121,10 +1142,31 @@ async def admin_business_codes(location_id: Optional[str] = None, authorization:
     ]
 
 
+async def _broadcast_impl(body: BroadcastBody) -> dict:
+    """Actually broadcast — never exposed as a public route (see admin router)."""
+    tokens = await db.push_tokens.find({"location_id": body.location_id}, PROJECTION).to_list(1000)
+    recipients = list({t["user_id"] for t in tokens if t.get("user_id")})
+    doc = {
+        "id": _uid(),
+        "location_id": body.location_id,
+        "title_en": body.title, "title_te": body.title,
+        "body_en": body.message, "body_te": body.message,
+        "posted_at": datetime.now(timezone.utc).isoformat(),
+        "tag_en": body.tag_en, "tag_te": body.tag_te,
+    }
+    await db.updates.insert_one(doc)
+    try:
+        if recipients:
+            await send_push(recipients, {"title": body.title, "message": body.message, "action_url": "/section/updates"})
+    except Exception as e:
+        logger.warning("broadcast push failed: %s", e)
+    return {"status": "ok", "recipients": len(recipients)}
+
+
 @api_router.post("/admin/announcements/broadcast")
 async def admin_broadcast(body: BroadcastBody, authorization: Optional[str] = Header(None)):
     await require_admin(authorization)
-    return await broadcast(body)
+    return await _broadcast_impl(body)
 
 
 @api_router.put("/admin/business/{business_id}", response_model=Business)

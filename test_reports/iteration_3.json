@@ -1,0 +1,40 @@
+{
+  "summary": "Security-audit verification for Mana Ooru backend against the public URL. 17/17 pytest cases pass. All five SEC-* fixes verified: SEC-001 public broadcast route removed (404), admin broadcast still 401 without token. SEC-002 legacy deterministic 6-digit codes now rejected (401), 6th failed attempt in a row on same business_id returns 429. SEC-003 /files traversal blocked (URL-encoded `..` -> 404), other namespace -> 404, valid prefix missing key -> 404. SEC-004 report dedup works: same device_id repeated returns already_reported and does NOT increment counter, 5 unique device_ids hide the post, hidden post excluded from GET /api/posts, no `hidden_if` field exists on any post. SEC-005 anonymous /register-push ignores client-supplied user_id and stores server-derived `anon_<sha256(device_token)[:16]>`. Non-regression sanity: GET /api/ returns expected payload, /locations returns single `patavala` with district_en 'Kakinada–Yanam Road', /businesses returns 27, /buses returns 6, /auth/session with garbage -> 401. No `_id` leaks in any response body sampled.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/files/{path:path}", "issue": "Literal `..` segments in the request path are normalised by the Kubernetes ingress before reaching FastAPI, so `GET /api/files/../../etc/passwd` is rewritten to `GET /etc/passwd` and served by the Expo frontend as SPA index HTML (HTTP 200). This is not a backend leak (no filesystem traversal happens) but it means the literal path-form of the SEC-003 test case is intercepted by the proxy layer. The backend's own defence correctly returns 404 when the encoded form `..%2F..%2Fetc%2Fpasswd` reaches it. Consider adding an ingress rule that returns 404 for normalised `/etc/passwd` requests, or accept the current behaviour as a benign artefact of Kubernetes ingress normalisation."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_security_audit.py",
+    "/app/test_reports/pytest/security_audit_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: Add an ingress-level 404 for paths that normalise to `/etc/passwd` (or other system paths) so the literal `../../etc/passwd` probe returns 404 rather than the Expo SPA index. Not a security risk today because no file is served, but it's a nicer signal."
+  ],
+  "critical_code_review_comments": [
+    "server.py:750-784 /register-push correctly rederives user_id from sha256(device_token) when the request is unauthenticated; the client-supplied `user_id` field is now silently ignored, matching SEC-005.",
+    "server.py:801 old public /announcements/broadcast alias is fully removed (comment marker only). SEC-001 verified.",
+    "server.py:824-836 /files handler checks prefix + `..` + absolute path in one guard. SEC-003 verified.",
+    "server.py:875-899 /posts/{id}/report uses a unique index on (post_id, device_id) for dedup; correctly returns already_reported on duplicate and auto-hides at reports>=5. `hidden_if` stray field flagged in iteration 2 is gone. SEC-004 verified.",
+    "server.py:947-968 edit-login rate limit uses TTL-indexed edit_login_attempts collection (expireAfterSeconds=3600) and only counts `ok:false` rows; 6th failure in an hour returns 429. Edit codes backfilled to random 8-char strings on startup (lines 288-295). SEC-002 verified."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_security_audit.py (new)",
+    "/app/test_reports/pytest/security_audit_results.xml (new)",
+    "/app/test_reports/iteration_3.json (new)"
+  ],
+  "success_rate": {"backend": "100% (17/17 security-audit cases)", "frontend": "N/A (backend-only scope)"},
+  "seed_data_creation": "Inserted a temporary post document into `posts` collection for SEC-004 dedup/hide tests; the test class fixture cleans it (and matching post_reports rows) after the class completes. edit_login_attempts rows for the two probed businesses are also cleaned up.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All security-audit fixes green. Reusable pytest suite at /app/backend/tests/test_security_audit.py; run with `pytest /app/backend/tests/test_security_audit.py -v`. It reads MONGO_URL/DB_NAME from env (defaults to localhost/test_database) and EXPO_PUBLIC_BACKEND_URL for the public URL. Note: the SEC-003 literal `..` path is intercepted by the Kubernetes ingress and never reaches FastAPI; use URL-encoded traversal probes to actually exercise the backend defence.",
+  "rca_of_issue": "N/A — no blocking bugs found."
+}

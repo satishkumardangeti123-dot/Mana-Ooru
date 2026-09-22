@@ -100,7 +100,8 @@ export const api = {
     req<SearchResult>("/search", { method: "POST", body: JSON.stringify(payload) }),
   buses: (location_id: string) => req<BusesResp>(`/buses?location_id=${encodeURIComponent(location_id)}`),
   posts: (location_id: string) => req<Post[]>(`/posts?location_id=${encodeURIComponent(location_id)}`),
-  reportPost: (id: string) => req<{ status: string }>(`/posts/${id}/report`, { method: "POST" }),
+  reportPost: (id: string, device_id: string) =>
+    req<{ status: string }>(`/posts/${id}/report`, { method: "POST", body: JSON.stringify({ device_id }) }),
   reactPost: (id: string, kind: ReactionKind, device_id: string) =>
     req<{ reactions: { pray?: number; heart?: number; alert?: number } }>(`/posts/${id}/react`, {
       method: "POST",

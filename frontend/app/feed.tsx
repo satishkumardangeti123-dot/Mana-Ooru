@@ -12,6 +12,7 @@ import { useAppState } from "@/src/app-state";
 import { api } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { ReactionsRow } from "@/src/components/reactions";
+import { getDeviceId } from "@/src/device";
 
 export default function Feed() {
   const insets = useSafeAreaInsets();
@@ -44,7 +45,11 @@ export default function Feed() {
   };
 
   const onReport = async (id: string) => {
-    try { await api.reportPost(id); Alert.alert(t("reportedThanks")); } catch {}
+    try {
+      const dev = await getDeviceId();
+      await api.reportPost(id, dev);
+      Alert.alert(t("reportedThanks"));
+    } catch {}
   };
 
   return (
