@@ -72,6 +72,7 @@ class Business(BaseModel):
     lat: Optional[float] = None
     lng: Optional[float] = None
     verified: bool = False
+    photos: List[str] = Field(default_factory=list)
 
 
 class EmergencyContact(BaseModel):
@@ -152,6 +153,12 @@ class Post(BaseModel):
     posted_at: str
     reports: int = 0
     hidden: bool = False
+    reactions: dict = Field(default_factory=lambda: {"pray": 0, "heart": 0, "alert": 0})
+
+
+class ReactionBody(BaseModel):
+    kind: str  # "pray" | "heart" | "alert"
+    device_id: str
 
 
 class BusinessEditLogin(BaseModel):
@@ -177,9 +184,7 @@ def _uid() -> str:
 
 
 LOCATIONS_SEED = [
-    {"id": "patavala", "name_en": "Patavala", "name_te": "పటవల", "district_en": "Kakinada", "district_te": "కాకినాడ", "state_en": "Andhra Pradesh", "state_te": "ఆంధ్రప్రదేశ్", "lat": 16.9891, "lng": 82.2475},
-    {"id": "kakinada", "name_en": "Kakinada", "name_te": "కాకినాడ", "district_en": "Kakinada", "district_te": "కాకినాడ", "state_en": "Andhra Pradesh", "state_te": "ఆంధ్రప్రదేశ్", "lat": 16.9891, "lng": 82.2475},
-    {"id": "samalkota", "name_en": "Samalkota", "name_te": "సామర్లకోట", "district_en": "Kakinada", "district_te": "కాకినాడ", "state_en": "Andhra Pradesh", "state_te": "ఆంధ్రప్రదేశ్", "lat": 17.0530, "lng": 82.1710},
+    {"id": "patavala", "name_en": "Patavala", "name_te": "పటవల", "district_en": "Kakinada–Yanam Road", "district_te": "కాకినాడ–యానాం రోడ్", "state_en": "Andhra Pradesh", "state_te": "ఆంధ్రప్రదేశ్", "lat": 16.9891, "lng": 82.2475},
 ]
 
 EMERGENCY_SEED = [
@@ -880,6 +885,38 @@ async def report_post(post_id: str):
     return {"status": "ok"}
 
 
+VALID_REACTIONS = {"pray", "heart", "alert"}
+
+
+@api_router.post("/posts/{post_id}/react")
+async def react_post(post_id: str, body: ReactionBody):
+    if body.kind not in VALID_REACTIONS:
+        raise HTTPException(400, "invalid reaction")
+    post = await db.posts.find_one({"id": post_id}, PROJECTION)
+    if not post:
+        raise HTTPException(404, "post not found")
+    existing = await db.post_reactions.find_one({"post_id": post_id, "device_id": body.device_id})
+    if existing and existing.get("kind") == body.kind:
+        # Toggle off
+        await db.post_reactions.delete_one({"_id": existing["_id"]})
+        await db.posts.update_one({"id": post_id}, {"$inc": {f"reactions.{body.kind}": -1}})
+    elif existing:
+        # Swap reaction
+        await db.posts.update_one({"id": post_id}, {"$inc": {f"reactions.{existing['kind']}": -1, f"reactions.{body.kind}": 1}})
+        await db.post_reactions.update_one({"_id": existing["_id"]}, {"$set": {"kind": body.kind, "at": datetime.now(timezone.utc)}})
+    else:
+        await db.post_reactions.insert_one({"post_id": post_id, "device_id": body.device_id, "kind": body.kind, "at": datetime.now(timezone.utc)})
+        await db.posts.update_one({"id": post_id}, {"$inc": {f"reactions.{body.kind}": 1}})
+    post = await db.posts.find_one({"id": post_id}, PROJECTION)
+    return {"reactions": post.get("reactions") or {"pray": 0, "heart": 0, "alert": 0}}
+
+
+@api_router.get("/posts/{post_id}/my-reaction")
+async def my_reaction(post_id: str, device_id: str = Query(...)):
+    row = await db.post_reactions.find_one({"post_id": post_id, "device_id": device_id}, PROJECTION)
+    return {"kind": row.get("kind") if row else None}
+
+
 @api_router.delete("/posts/{post_id}")
 async def delete_own_post(post_id: str, authorization: Optional[str] = Header(None)):
     u = await require_user(authorization)
@@ -955,6 +992,62 @@ async def biz_me(business_id: str, x_edit_token: Optional[str] = Header(None, al
     if not biz:
         raise HTTPException(404, "business not found")
     return Business(**biz)
+
+
+MAX_PHOTOS = 5
+
+
+async def _upload_biz_photo(business_id: str, file: UploadFile) -> str:
+    data = await file.read()
+    if not data:
+        raise HTTPException(400, "empty file")
+    if len(data) > 8 * 1024 * 1024:
+        raise HTTPException(413, "max 8MB")
+    ct = (file.content_type or "image/jpeg").lower()
+    ext = ".jpg"
+    if "png" in ct: ext = ".png"
+    elif "webp" in ct: ext = ".webp"
+    elif "heic" in ct: ext = ".heic"
+    path = f"{APP_NAME}/business/{business_id}/{uuid.uuid4().hex}{ext}"
+    await run_in_threadpool(_sync_put, path, data, ct)
+    return path
+
+
+@api_router.post("/business/{business_id}/photos")
+async def biz_add_photo(
+    business_id: str,
+    file: UploadFile = File(...),
+    x_edit_token: Optional[str] = Header(None, alias="X-Edit-Token"),
+):
+    await _require_edit_token(business_id, x_edit_token)
+    biz = await db.businesses.find_one({"id": business_id}, PROJECTION)
+    if not biz:
+        raise HTTPException(404, "business not found")
+    photos = list(biz.get("photos") or [])
+    if len(photos) >= MAX_PHOTOS:
+        raise HTTPException(400, f"max {MAX_PHOTOS} photos")
+    path = await _upload_biz_photo(business_id, file)
+    photos.append(path)
+    await db.businesses.update_one({"id": business_id}, {"$set": {"photos": photos, "verified": True}})
+    return {"photos": photos}
+
+
+@api_router.delete("/business/{business_id}/photos/{index}")
+async def biz_remove_photo(
+    business_id: str,
+    index: int,
+    x_edit_token: Optional[str] = Header(None, alias="X-Edit-Token"),
+):
+    await _require_edit_token(business_id, x_edit_token)
+    biz = await db.businesses.find_one({"id": business_id}, PROJECTION)
+    if not biz:
+        raise HTTPException(404, "business not found")
+    photos = list(biz.get("photos") or [])
+    if index < 0 or index >= len(photos):
+        raise HTTPException(404, "photo not found")
+    photos.pop(index)
+    await db.businesses.update_one({"id": business_id}, {"$set": {"photos": photos}})
+    return {"photos": photos}
 
 
 # ---------------- Admin ----------------
@@ -1095,6 +1188,12 @@ async def admin_full_audit(limit: int = 100, authorization: Optional[str] = Head
 @app.on_event("startup")
 async def on_start():
     await seed_if_empty()
+    # Migration: keep only Patavala for the first launch; refresh its label
+    await db.locations.delete_many({"id": {"$nin": ["patavala"]}})
+    await db.locations.update_one(
+        {"id": "patavala"},
+        {"$set": {"district_en": "Kakinada–Yanam Road", "district_te": "కాకినాడ–యానాం రోడ్"}},
+    )
     try:
         await run_in_threadpool(_sync_init_storage)
     except Exception as e:

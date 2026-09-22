@@ -11,6 +11,7 @@ import { useLang } from "@/src/i18n";
 import { useAppState } from "@/src/app-state";
 import { api } from "@/src/api";
 import { useAuth } from "@/src/auth";
+import { ReactionsRow } from "@/src/components/reactions";
 
 export default function Feed() {
   const insets = useSafeAreaInsets();
@@ -109,6 +110,7 @@ export default function Feed() {
                 {p.title ? <Text style={styles.postTitle}>{p.title}</Text> : null}
                 {p.body ? <Text style={styles.postBody}>{p.body}</Text> : null}
                 {img && <Image source={{ uri: img }} style={styles.postImage} contentFit="cover" />}
+                <ReactionsRow postId={p.id} initial={p.reactions} />
               </View>
             );
           }}

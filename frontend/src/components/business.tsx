@@ -1,9 +1,10 @@
 // Reusable business card + chip row for directory screens
 import { View, Text, Pressable, StyleSheet, Linking, ScrollView } from "react-native";
 import Icon from "@react-native-vector-icons/material-design-icons";
+import { Image } from "expo-image";
 import { colors, spacing, radius } from "@/src/theme";
 import { useLang } from "@/src/i18n";
-import type { Business } from "@/src/api";
+import { api, type Business } from "@/src/api";
 
 export function BusinessCard({ item, testID }: { item: Business; testID?: string }) {
   const { t, lang } = useLang();
@@ -69,6 +70,14 @@ export function BusinessCard({ item, testID }: { item: Business; testID?: string
           <Text style={styles.dirText}>{t("directions")}</Text>
         </Pressable>
       </View>
+
+      {item.photos && item.photos.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoStrip}>
+          {item.photos.map((p, i) => (
+            <Image key={`${p}-${i}`} source={{ uri: api.fileUrl(p) }} style={styles.photoThumb} contentFit="cover" testID={`biz-photo-${item.id}-${i}`} />
+          ))}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -125,6 +134,8 @@ const styles = StyleSheet.create({
   callText: { color: colors.onBrandPrimary, fontWeight: "700", fontSize: 14 },
   dirBtn: { backgroundColor: colors.brandTertiary, borderWidth: 1, borderColor: colors.brandTertiary },
   dirText: { color: colors.brandPrimary, fontWeight: "700", fontSize: 14 },
+  photoStrip: { gap: spacing.sm, paddingTop: 4 },
+  photoThumb: { width: 96, height: 96, borderRadius: radius.md, backgroundColor: colors.surfaceTertiary },
 
   chipRowWrap: { height: 56, justifyContent: "center", backgroundColor: colors.surface },
   chipRowContent: { paddingHorizontal: spacing.xl, gap: spacing.sm, alignItems: "center" },

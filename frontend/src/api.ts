@@ -30,6 +30,7 @@ export type Business = {
   hours_en?: string | null;
   hours_te?: string | null;
   verified?: boolean;
+  photos?: string[];
 };
 
 export type EmergencyContact = {
@@ -72,7 +73,10 @@ export type Post = {
   posted_at: string;
   reports: number;
   hidden: boolean;
+  reactions?: { pray?: number; heart?: number; alert?: number };
 };
+
+export type ReactionKind = "pray" | "heart" | "alert";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}/api${path}`, {
@@ -97,5 +101,12 @@ export const api = {
   buses: (location_id: string) => req<BusesResp>(`/buses?location_id=${encodeURIComponent(location_id)}`),
   posts: (location_id: string) => req<Post[]>(`/posts?location_id=${encodeURIComponent(location_id)}`),
   reportPost: (id: string) => req<{ status: string }>(`/posts/${id}/report`, { method: "POST" }),
+  reactPost: (id: string, kind: ReactionKind, device_id: string) =>
+    req<{ reactions: { pray?: number; heart?: number; alert?: number } }>(`/posts/${id}/react`, {
+      method: "POST",
+      body: JSON.stringify({ kind, device_id }),
+    }),
+  myReaction: (id: string, device_id: string) =>
+    req<{ kind: ReactionKind | null }>(`/posts/${id}/my-reaction?device_id=${encodeURIComponent(device_id)}`),
   fileUrl: (path?: string | null) => (path ? `${BASE}/api/files/${path}` : undefined),
 };

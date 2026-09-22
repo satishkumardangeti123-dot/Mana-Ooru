@@ -157,6 +157,10 @@ function ChooseLocation({ locations, selected, onSelect, t, lang }: { locations:
               </Pressable>
             );
           })}
+          <View style={styles.locationSoon} testID="onboarding-loc-coming-soon">
+            <Icon name="clock-outline" size={18} color={colors.muted} />
+            <Text style={styles.locationSoonText}>More locations coming soon</Text>
+          </View>
         </View>
       </View>
     </ScrollView>
@@ -236,6 +240,8 @@ const styles = StyleSheet.create({
   },
   locationName: { fontSize: 17, fontWeight: "600", color: colors.onSurface },
   locationMeta: { fontSize: 13, color: colors.muted, marginTop: 2 },
+  locationSoon: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.surfaceTertiary, borderWidth: 1, borderStyle: "dashed", borderColor: colors.border },
+  locationSoonText: { fontSize: 13, color: colors.muted, fontWeight: "600" },
   interestGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md, marginTop: spacing.lg },
   interestCell: {
     width: "47%", padding: spacing.lg, borderRadius: radius.lg,

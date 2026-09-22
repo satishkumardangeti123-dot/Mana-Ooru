@@ -128,29 +128,32 @@ export default function Settings() {
           </View>
         </View>
 
-        {/* Location */}
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>{t("location")}</Text>
-          <View style={{ gap: spacing.sm }}>
-            {locations.map((loc) => {
-              const active = locationId === loc.id;
-              return (
-                <Pressable
-                  key={loc.id}
-                  onPress={() => setLocationId(loc.id)}
-                  style={[styles.locRow, active && styles.locRowActive]}
-                  testID={`settings-loc-${loc.id}`}
-                >
-                  <Icon name={active ? "radiobox-marked" : "radiobox-blank"} size={22} color={active ? colors.brandPrimary : colors.muted} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.locName}>{lang === "te" ? loc.name_te : loc.name_en}</Text>
-                    <Text style={styles.locMeta}>{lang === "te" ? loc.district_te : loc.district_en}</Text>
-                  </View>
-                </Pressable>
-              );
-            })}
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>{t("location")}</Text>
+            <View style={{ gap: spacing.sm }}>
+              {locations.map((loc) => {
+                const active = locationId === loc.id;
+                return (
+                  <Pressable
+                    key={loc.id}
+                    onPress={() => setLocationId(loc.id)}
+                    style={[styles.locRow, active && styles.locRowActive]}
+                    testID={`settings-loc-${loc.id}`}
+                  >
+                    <Icon name={active ? "radiobox-marked" : "radiobox-blank"} size={22} color={active ? colors.brandPrimary : colors.muted} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.locName}>{lang === "te" ? loc.name_te : loc.name_en}</Text>
+                      <Text style={styles.locMeta}>{lang === "te" ? loc.district_te : loc.district_en}</Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+              <View style={styles.comingSoon} testID="settings-loc-coming-soon">
+                <Icon name="clock-outline" size={18} color={colors.muted} />
+                <Text style={styles.comingSoonText}>More locations coming soon</Text>
+              </View>
+            </View>
           </View>
-        </View>
 
         {/* Employee entry */}
         <View style={styles.card}>
@@ -215,6 +218,8 @@ const styles = StyleSheet.create({
   locRowActive: { borderColor: colors.brandPrimary, backgroundColor: colors.brandTertiary },
   locName: { fontSize: 15, fontWeight: "700", color: colors.onSurface },
   locMeta: { fontSize: 12, color: colors.muted, marginTop: 2 },
+  comingSoon: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingVertical: spacing.md, paddingHorizontal: spacing.md, borderRadius: radius.md, backgroundColor: colors.surfaceTertiary, borderWidth: 1, borderStyle: "dashed", borderColor: colors.border },
+  comingSoonText: { fontSize: 13, color: colors.muted, fontWeight: "600" },
   employeeBtn: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   employeeTitle: { fontSize: 15, fontWeight: "700", color: colors.onSurface },
   about: { fontSize: 14, color: colors.onSurfaceSecondary, lineHeight: 20 },

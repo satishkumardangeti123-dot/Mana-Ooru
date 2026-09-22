@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable, TextInput, ActivityIndicator, Alert, Switch } from "react-native";
+import { View, Text, StyleSheet, Pressable, TextInput, ActivityIndicator, Alert, Switch, ScrollView, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, Stack, useLocalSearchParams } from "expo-router";
 import Icon from "@react-native-vector-icons/material-design-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
+import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
 
 import { colors, spacing, radius } from "@/src/theme";
 import { useLang } from "@/src/i18n";
-import type { Business } from "@/src/api";
+import { api, type Business } from "@/src/api";
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL ?? "";
 
@@ -35,6 +37,8 @@ export default function EmployeeEdit() {
   const [hoursEn, setHoursEn] = useState("");
   const [hoursTe, setHoursTe] = useState("");
   const [openNow, setOpenNow] = useState(true);
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [photoBusy, setPhotoBusy] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -66,6 +70,7 @@ export default function EmployeeEdit() {
         setAddressEn(b.address_en ?? ""); setAddressTe(b.address_te ?? "");
         setHoursEn(b.hours_en ?? ""); setHoursTe(b.hours_te ?? "");
         setOpenNow(b.open_now);
+        setPhotos(b.photos ?? []);
       } finally {
         setLoading(false);
       }
@@ -99,6 +104,68 @@ export default function EmployeeEdit() {
   const logout = async () => {
     await AsyncStorage.multiRemove(["@manaooru:edit_token", "@manaooru:edit_business_id"]);
     router.replace("/(tabs)");
+  };
+
+  const pickAndUpload = async () => {
+    if (!token || !businessId) return;
+    if (photos.length >= 5) {
+      Alert.alert("Photos", "Max 5 photos per shop.");
+      return;
+    }
+    const source: "camera" | "library" | null = await new Promise((resolve) => {
+      Alert.alert(t("chooseSource"), "", [
+        { text: t("cancel"), style: "cancel", onPress: () => resolve(null) },
+        { text: t("takePhoto"), onPress: () => resolve("camera") },
+        { text: t("fromGallery"), onPress: () => resolve("library") },
+      ]);
+    });
+    if (!source) return;
+    const perm = source === "camera"
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) { Alert.alert(t("addPhoto"), "Please allow access."); return; }
+    const res = source === "camera"
+      ? await ImagePicker.launchCameraAsync({ mediaTypes: ["images"] as any, quality: 0.7 })
+      : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"] as any, quality: 0.7 });
+    if (res.canceled) return;
+    const asset = res.assets[0];
+    setPhotoBusy(true);
+    try {
+      const form = new FormData();
+      if (Platform.OS === "web") {
+        const blob = await (await fetch(asset.uri)).blob();
+        form.append("file", blob, "photo.jpg");
+      } else {
+        // @ts-expect-error native FormData
+        form.append("file", { uri: asset.uri, name: "photo.jpg", type: asset.mimeType || "image/jpeg" });
+      }
+      const r = await fetch(`${BASE}/api/business/${encodeURIComponent(businessId)}/photos`, {
+        method: "POST",
+        headers: { "X-Edit-Token": token },
+        body: form as any,
+      });
+      if (!r.ok) throw new Error(String(r.status));
+      const data = await r.json();
+      setPhotos(data.photos ?? []);
+    } catch (e: any) {
+      Alert.alert("Error", String(e?.message ?? e));
+    } finally { setPhotoBusy(false); }
+  };
+
+  const removePhoto = async (index: number) => {
+    if (!token || !businessId) return;
+    setPhotoBusy(true);
+    try {
+      const r = await fetch(`${BASE}/api/business/${encodeURIComponent(businessId)}/photos/${index}`, {
+        method: "DELETE",
+        headers: { "X-Edit-Token": token },
+      });
+      if (!r.ok) throw new Error(String(r.status));
+      const data = await r.json();
+      setPhotos(data.photos ?? []);
+    } catch (e: any) {
+      Alert.alert("Error", String(e?.message ?? e));
+    } finally { setPhotoBusy(false); }
   };
 
   if (loading) {
@@ -137,6 +204,27 @@ export default function EmployeeEdit() {
             </View>
             <Switch value={openNow} onValueChange={setOpenNow} thumbColor={openNow ? colors.brandPrimary : "#f4f3f4"} trackColor={{ true: colors.brandTertiary, false: colors.border }} testID="employee-edit-open-now" />
           </View>
+        </View>
+
+        {/* Photos */}
+        <View style={styles.card}>
+          <Text style={styles.cardLabel}>Shop photos · {photos.length}/5</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, paddingVertical: 4 }}>
+            {photos.map((p, i) => (
+              <View key={`${p}-${i}`} style={styles.photoWrap} testID={`shop-photo-${i}`}>
+                <Image source={{ uri: api.fileUrl(p) }} style={styles.photoThumb} contentFit="cover" />
+                <Pressable onPress={() => removePhoto(i)} style={styles.photoRemove} testID={`shop-photo-remove-${i}`}>
+                  <Icon name="close" size={12} color={colors.onError} />
+                </Pressable>
+              </View>
+            ))}
+            {photos.length < 5 && (
+              <Pressable onPress={pickAndUpload} disabled={photoBusy} style={[styles.photoAdd, photoBusy && { opacity: 0.5 }]} testID="shop-photo-add">
+                {photoBusy ? <ActivityIndicator color={colors.brandPrimary} /> : <Icon name="image-plus" size={24} color={colors.brandPrimary} />}
+              </Pressable>
+            )}
+          </ScrollView>
+          <Text style={styles.helper}>Photos help villagers recognise your shop and build trust.</Text>
         </View>
 
         <Field label="Name (English)" value={nameEn} onChange={setNameEn} testID="employee-edit-name-en" />
@@ -195,6 +283,10 @@ const styles = StyleSheet.create({
   inputWrap: { gap: 6 },
   label: { fontSize: 12, fontWeight: "700", color: colors.muted, textTransform: "uppercase", letterSpacing: 0.5 },
   input: { fontSize: 15, color: colors.onSurface, padding: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surfaceSecondary },
+  photoWrap: { position: "relative" },
+  photoThumb: { width: 96, height: 96, borderRadius: radius.md, backgroundColor: colors.surfaceTertiary },
+  photoRemove: { position: "absolute", top: -4, right: -4, width: 22, height: 22, borderRadius: 11, backgroundColor: colors.error, alignItems: "center", justifyContent: "center" },
+  photoAdd: { width: 96, height: 96, borderRadius: radius.md, borderWidth: 1, borderStyle: "dashed", borderColor: colors.brandPrimary, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center" },
   footer: { paddingHorizontal: spacing.xl, paddingTop: spacing.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, backgroundColor: colors.surface },
   primaryBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, paddingVertical: 16, borderRadius: radius.pill, backgroundColor: colors.brandPrimary },
   primaryBtnText: { color: colors.onBrandPrimary, fontSize: 16, fontWeight: "800" },
