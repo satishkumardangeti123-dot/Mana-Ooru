@@ -1,0 +1,153 @@
+{
+  "app_name": "Mana Ooru",
+  "personality": "1 iOS-Native Clean",
+  "personality_one_liner": "A premium, trustworthy, and highly accessible digital utility for rural communities, prioritizing clarity and ease of use.",
+  "color": {
+    "surface": "#FFFFFF",
+    "onSurface": "#1F2937",
+    "surfaceSecondary": "#F9FAFB",
+    "onSurfaceSecondary": "#374151",
+    "surfaceTertiary": "#F3F4F6",
+    "onSurfaceTertiary": "#4B5563",
+    "surfaceInverse": "#111827",
+    "onSurfaceInverse": "#FFFFFF",
+    "brand": "#16A34A",
+    "brandPrimary": "#15803D",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#22C55E",
+    "onBrandSecondary": "#FFFFFF",
+    "brandTertiary": "#DCFCE7",
+    "onBrandTertiary": "#166534",
+    "accentPrimary": "#EA580C",
+    "onAccentPrimary": "#FFFFFF",
+    "success": "#16A34A",
+    "onSuccess": "#FFFFFF",
+    "warning": "#F59E0B",
+    "onWarning": "#FFFFFF",
+    "error": "#DC2626",
+    "onError": "#FFFFFF",
+    "info": "#3B82F6",
+    "onInfo": "#FFFFFF",
+    "border": "#E5E7EB",
+    "borderStrong": "#D1D5DB",
+    "divider": "#F3F4F6",
+    "muted": "#6B7280",
+    "onBrand": "#FFFFFF"
+  },
+  "typography": {
+    "displayFontFamily": "Plus Jakarta Sans",
+    "textFontFamily": "Plus Jakarta Sans",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous spacing to ensure large, accessible touch targets for 18-60+ demographic. Use consistent 16px/24px margins.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "1",
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": "false",
+    "do's": [
+      "Avoid glassmorphism to maintain maximum contrast and readability for older rural users."
+    ],
+    "dont's": [
+      "Do not use blur or glass effects on critical UI elements or cards."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Onboarding",
+      "purpose": "Introduce the app's value and set the user's preferred language (English/Telugu) seamlessly.",
+      "states": {
+        "loading": "Clean spinner in brand color.",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "Full-bleed rural imagery at the top with a top-to-bottom dark gradient scrim. The bottom 40% houses a white surface container with large typography, language toggle pills, and a prominent sticky 'Continue' button."
+    },
+    {
+      "name": "Home",
+      "purpose": "Primary discovery hub for all village utilities with immediate access to critical services.",
+      "states": {
+        "loading": "Skeleton loaders for cards and search bar.",
+        "empty": "N/A",
+        "error": "Error message with 'Retry' button."
+      },
+      "layout": "Top section: Location selector ('📍 Patavala' + 'Kakinada district, AP') placed prominently. Large search bar ('What do you need?') with rotating placeholders. Below: A generous 2-column grid (`flexWrap: 'wrap'`, `justifyContent: 'space-between'`, `gap: md`) of 8 large rounded quick-action cards. Cards should have a tinted icon (`brandTertiary` background) and dark charcoal text. No dense dashboard layouts."
+    },
+    {
+      "name": "Emergency",
+      "purpose": "Instant access to critical emergency services with an accessible, high-contrast interface.",
+      "states": {
+        "loading": "Skeleton loader for the grid.",
+        "empty": "N/A",
+        "error": "Clear network error with a persistent offline fallback text."
+      },
+      "layout": "Prominent but not frightening. A 2-column grid of large red-tinted buttons (Ambulance, Police, Fire, Hospitals, Pharmacy, Blood Help) with high-contrast text and recognizable icons. A large, sticky 'CALL EMERGENCY SERVICES' CTA anchored at the bottom (outside scroll view)."
+    },
+    {
+      "name": "Health Directory",
+      "purpose": "A searchable list of nearby health resources (hospitals, pharmacies, doctors).",
+      "states": {
+        "loading": "Skeleton rows of cards.",
+        "empty": "Clean illustration with 'No health services found nearby.' and a CTA to clear filters.",
+        "error": "Readable network error message."
+      },
+      "layout": "Top horizontal scrollable category chip row (Hospitals, Doctors, Pharmacies, etc.). Below: Single-column list of large Business Cards. Each card includes: Name, Category, an 'Open' indicator (green dot + text), distance in km, and a bottom row of large pill buttons [Call] and [Direction]. Cards use soft shadow and large typography."
+    }
+  ],
+  "images": {
+    "hero_village": {
+      "url": "https://images.unsplash.com/photo-1785996361834-c41edd04c51d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjV8MHwxfHNlYXJjaHwyfHxJbmRpYW4lMjB2aWxsYWdlJTIwcnVyYWwlMjBsYW5kc2NhcGUlMjBjbGVhbiUyMGJyaWdodHxlbnwwfHx8fDE3OTAxMTUwOTF8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Rural landscape with flooded fields and paths, warm and inviting"
+    },
+    "village_agriculture": {
+      "url": "https://images.pexels.com/photos/15727702/pexels-photo-15727702.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Serene green farm fields representing agriculture"
+    },
+    "emergency_ambulance": {
+      "url": "https://images.pexels.com/photos/28123663/pexels-photo-28123663.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Paramedic standing inside an ambulance, ready for emergency response"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Prioritize accessibility: Use Plus Jakarta Sans, large touch targets (min 56pt), and high contrast (WCAG AA) to ensure older rural users (18-60+) can easily navigate the app.",
+    "Implement English/Telugu language toggle seamlessly. Ensure UI elements are flexible enough to handle longer Telugu text strings without breaking layout.",
+    "For the Home screen, the 8 quick-action cards must use a 2-column grid wrapping layout. The cards should feature large Phosphor icons inside `brandTertiary` tinted containers.",
+    "Emergency Screen MUST use large, red-tinted (`#FEE2E2` / `error` shade background) touch targets for the 6 primary emergency categories, and have a sticky global emergency CTA docked at the bottom.",
+    "Health business cards must prominently display a green 'Open' indicator and have dedicated [Call] and [Directions] pill buttons inside the card.",
+    "Use solid white (`surface`) and off-white (`surfaceSecondary`) cleanly. Do not use glassmorphism or dense shadows as they hinder legibility.",
+    "Apply Saffron (`#EA580C`) strictly as a small accent (e.g., notification dots, active toggles) and Green (`#16A34A`) as the primary brand color."
+  ]
+}

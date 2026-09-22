@@ -1,0 +1,46 @@
+{
+  "summary": "First end-to-end test of Mana Ooru MVP (backend + Expo web frontend). Backend: 12/12 pytest cases pass through the public URL — all locations, emergency, businesses (health/transport/government + pharmacy filter), updates, AI /search endpoint (returns intent.section='health' with pharmacy results), and no MongoDB _id leaks. Frontend: onboarding 3 steps, home, emergency, health (chips + business cards with Call/Directions), search, More tab and Settings all render and are navigable on 390x844 mobile viewport. Language toggle to Telugu works on both onboarding and settings. Only one missing testID and a few minor UI observations.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Home search bar", "issue": "testID 'home-search-submit' is MISSING in DOM. All other home-* testIDs are present. Search still functions because pressing Enter in the input navigates to /search?q=..., but the spec explicitly requires a tappable submit button with this testID.", "testID": "home-search-submit", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Onboarding step 1 (Telugu)", "issues": ["Telugu glyphs on the Welcome screen render with visible character gaps / broken conjuncts on web (e.g. 'మన ఊరుకు నీవగ త'). This is likely a missing Telugu web font — the same text renders fine on Settings/Emergency screens where system fonts are used. Consider bundling a Telugu-capable font (Noto Sans Telugu) via expo-font for the branded title/tagline."]},
+      {"screen": "Emergency", "issues": ["Card labelled 'Blood Help · 104' is shown in the UI, but 104 is not a national blood helpline number and there is no 'blood' entry in the EMERGENCY_SEED (only ambulance/police/fire/women/child/disaster). Number appears to be hard-coded in the emergency screen — please verify and cite an official source or remove."]}
+    ],
+    "react_native_issues": [
+      {"component": "global styles", "issue": "Console warning repeated many times: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' Non-blocking but should be migrated to boxShadow or Platform.select for future RN Web versions."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_mana_ooru.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Add testID='home-search-submit' to the submit/search icon button next to the search input on the Home screen (currently missing while all other home-* testIDs exist).",
+    "Fix Telugu font rendering on the Welcome onboarding screen — bundle Noto Sans Telugu (or similar) via expo-font and apply to the branded title/tagline text styles.",
+    "Verify the 'Blood Help · 104' emergency card: 104 is not a standard national helpline. Either back it with a real seeded contact or remove/replace it (e.g. link to 108 for blood emergencies).",
+    "Migrate 'shadow*' style props to 'boxShadow' (or use Platform.select) to silence RN Web deprecation warnings."
+  ],
+  "critical_code_review_comments": [
+    "server.py: PROJECTION correctly excludes _id — verified by tests. Good.",
+    "server.py: /search fallback to rule-based intent when LLM fails is well-implemented; response schema is stable.",
+    "server.py: seed_if_empty runs on startup and is idempotent. Good.",
+    "Emergency helpline numbers should be sourced from the /api/emergency endpoint rather than hard-coded in emergency.tsx (the 'Blood Help · 104' entry is not in the seed)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_mana_ooru.py (new)",
+    "/app/test_reports/pytest/pytest_results.xml (new)",
+    "/app/test_reports/iteration_1.json (new)"
+  ],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "~95% (1 missing testID, 2 minor UI issues)"},
+  "seed_data_creation": "None — backend seed_if_empty already populated locations, emergency, businesses, updates.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend is stable; focus on: (1) confirming home-search-submit testID renders and is tappable, (2) Telugu font fix on Welcome screen, (3) Blood/104 emergency card resolution. Onboarding data is stored in AsyncStorage; to reach Home directly use /(tabs) after completing onboarding once, or clear storage to re-test onboarding."
+}

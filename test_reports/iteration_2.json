@@ -1,0 +1,53 @@
+{
+  "summary": "Round-2 feature testing (Google Auth, Push, Voice, Bus Timings, Community Feed, Business Editor). Backend: 15/15 new pytest cases pass (all round-2 endpoints working correctly through the public URL). No MongoDB _id leaks in any response. Frontend: Onboarding, Home (all 8 quick-actions incl. updates->/feed, home-search-submit now present, bus-card-0 renders), Feed (loads with broadcast post), /post/new sign-in card with post-signin-btn, Settings (all testIDs present, TE toggle re-renders UI in Telugu), Employee login + edit (wrong code -> 401, correct code -> /employee/edit with all fields, save PUTs successfully, logout returns to /(tabs)). Deprecated 'shadow*' style-prop warnings still present.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Community feed FAB (unauthenticated)", "issue": "Spec expects Alert dialog when tapping feed-new-post FAB while signed out. Actual behaviour: FAB navigates to /post/new which then shows a 'Sign in to post to the feed' card + post-signin-btn. Functionally equivalent (user is prompted to sign in) but no native Alert() is triggered. Consider aligning implementation with spec or updating spec.", "affected_testIDs": ["feed-new-post", "post-signin-btn"]},
+      {"flow": "Employee edit save feedback", "issue": "Tapping employee-edit-save PUTs successfully (backend returns 200) but no visible success Alert or toast appeared in the automation run. UI stays on the edit screen. Recommend showing a success confirmation for user feedback.", "affected_testIDs": ["employee-edit-save"]}
+    ],
+    "design_issues": [
+      {"screen": "Onboarding Welcome (Telugu)", "issues": ["Iteration 1 finding: Telugu glyphs on the branded Welcome title still render with visible character gaps / broken conjuncts on web preview. Bundle Noto Sans Telugu via expo-font."]}
+    ],
+    "react_native_issues": [
+      {"component": "global styles", "issue": "React Native Web deprecation warning repeated: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' — migrate shadowColor/shadowOffset/shadowOpacity/shadowRadius to boxShadow (or use Platform.select). Reference: various components across app (multiple stylesheets)."},
+      {"component": "expo-notifications on web", "issue": "Warning: 'Listening to push token changes is not yet fully supported on web. Adding a listener will have no effect.' — expected on web preview; consider guarding the push-token listener with Platform.OS !== 'web' in /app/frontend/src/push.ts to silence the warning. Live push will only work on a real native build."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_mana_ooru.py",
+    "/app/backend/tests/test_round2.py",
+    "/app/test_reports/pytest/round2_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: Trigger a native Alert.alert('Sign in required',...) in feed.tsx when a signed-out user taps feed-new-post FAB, per spec — or accept current /post/new route as the sign-in prompt.",
+    "Show a success Alert or toast after successful save in /employee/edit for user feedback.",
+    "Migrate 'shadow*' style props to 'boxShadow' (or Platform.select) to silence RN Web deprecation warnings.",
+    "Guard push listener with Platform.OS !== 'web' in src/push.ts to remove noisy web warnings.",
+    "Bundle Noto Sans Telugu via expo-font and apply to Welcome onboarding title (carry-over from iteration 1)."
+  ],
+  "critical_code_review_comments": [
+    "server.py: /buses returns non-negative eta_min via wrap-around (eta += 24*60 if <0). Verified.",
+    "server.py: /business/{id}/edit-login uses seeded edit_code derived from sha1(business_id) % 1_000_000 (formula matches memory/test_credentials.md). DO NOT change formula.",
+    "server.py: All responses use PROJECTION={_id:0}. No _id leaks in any tested endpoint.",
+    "server.py: /voice/transcribe correctly rejects empty body with 400 and doesn't 404/500 on garbage bytes (502 from Whisper on non-audio).",
+    "server.py: /register-push tolerates placeholder EMERGENT_PUSH_KEY (401 upstream is logged and ignored) and returns 201.",
+    "server.py: /posts/{id}/report has a stray '$set: {hidden_if: True}' side-effect that writes an unused field — likely a typo, should be removed or renamed to 'hidden' logic. Not blocking.",
+    "server.py: biz_edit_tokens TTL index is on 'expires_at'; verified expired tokens are rejected in _require_edit_token even before Mongo TTL sweeps."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_round2.py (new)",
+    "/app/test_reports/pytest/round2_results.xml (new)",
+    "/app/test_reports/iteration_2.json (new)"
+  ],
+  "success_rate": {"backend": "100% (15/15 round-2 + 12/12 round-1 previously)", "frontend": "~95% (2 minor integration deviations; all testIDs present)"},
+  "seed_data_creation": "TEST_Broadcast update inserted via /api/announcements/broadcast during backend tests (visible in /feed as 'Official update · TEST_Broadcast'). Consider clearing before demo.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend fully green (27 passing across round-1 & round-2 files). Round-2 feature list verified. Google Sign-in end-to-end not testable in preview (no real Google account) — only UI + /auth/session rejection verified. Push delivery only works on a real native build; /register-push route verified to return 201. Voice transcription route exists and validates input; real audio not tested. To clean seeded TEST_Broadcast update: db.updates.deleteMany({title_en: {$regex: '^TEST_'}}).",
+  "rca_of_issue": "N/A — no blocking bugs found in this iteration."
+}
