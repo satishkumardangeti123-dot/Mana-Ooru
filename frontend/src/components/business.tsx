@@ -25,7 +25,15 @@ export function BusinessCard({ item, testID }: { item: Business; testID?: string
     <View style={styles.card} testID={testID}>
       <View style={styles.headRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.name} numberOfLines={2}>{name}</Text>
+          <View style={styles.nameRow}>
+            <Text style={styles.name} numberOfLines={2}>{name}</Text>
+            {item.verified && (
+              <View style={styles.verifiedPill} testID={`biz-verified-${item.id}`}>
+                <Icon name="check-decagram" size={12} color={colors.onAccentPrimary} />
+                <Text style={styles.verifiedText}>{t("verified")}</Text>
+              </View>
+            )}
+          </View>
           {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
         </View>
         <View style={[styles.statusPill, { backgroundColor: item.open_now ? colors.brandTertiary : colors.surfaceTertiary }]}>
@@ -100,7 +108,10 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   headRow: { flexDirection: "row", alignItems: "flex-start", gap: spacing.md },
-  name: { fontSize: 17, fontWeight: "700", color: colors.onSurface },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" },
+  name: { fontSize: 17, fontWeight: "700", color: colors.onSurface, flexShrink: 1 },
+  verifiedPill: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill, backgroundColor: colors.accentPrimary },
+  verifiedText: { color: colors.onAccentPrimary, fontSize: 10, fontWeight: "800", letterSpacing: 0.3 },
   subtitle: { fontSize: 13, color: colors.onSurfaceSecondary, marginTop: 2 },
   statusPill: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4, paddingHorizontal: 10, borderRadius: radius.pill },
   statusDot: { width: 8, height: 8, borderRadius: 4 },

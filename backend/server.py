@@ -26,6 +26,7 @@ mongo_url = os.environ["MONGO_URL"]
 DB_NAME = os.environ["DB_NAME"]
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
 EMERGENT_PUSH_KEY = os.environ.get("EMERGENT_PUSH_KEY", "placeholder")
+ADMIN_EMAILS = {e.strip().lower() for e in (os.environ.get("ADMIN_EMAILS", "") or "").split(",") if e.strip()}
 
 client = AsyncIOMotorClient(mongo_url)
 db = client[DB_NAME]
@@ -70,6 +71,7 @@ class Business(BaseModel):
     hours_te: Optional[str] = None
     lat: Optional[float] = None
     lng: Optional[float] = None
+    verified: bool = False
 
 
 class EmergencyContact(BaseModel):
@@ -627,14 +629,22 @@ async def auth_session(body: SessionRequest):
     existing = await db.users.find_one({"email": email}, PROJECTION)
     if existing:
         user_id = existing["user_id"]
-        await db.users.update_one({"user_id": user_id}, {"$set": {"name": name, "picture": picture}})
+        set_fields = {"name": name, "picture": picture}
+        # Backfill role
+        if email.lower() in ADMIN_EMAILS and existing.get("role") != "admin":
+            set_fields["role"] = "admin"
+        elif email.lower() not in ADMIN_EMAILS and existing.get("role") == "admin":
+            set_fields["role"] = "user"
+        await db.users.update_one({"user_id": user_id}, {"$set": set_fields})
     else:
         user_id = f"user_{uuid.uuid4().hex[:12]}"
+        role = "admin" if email.lower() in ADMIN_EMAILS else "user"
         await db.users.insert_one({
             "user_id": user_id,
             "email": email,
             "name": name,
             "picture": picture,
+            "role": role,
             "created_at": datetime.now(timezone.utc),
         })
     now = datetime.now(timezone.utc)
@@ -925,7 +935,15 @@ async def biz_update(
     if not updates:
         raise HTTPException(400, "nothing to update")
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+    updates["verified"] = True  # Owner-edited = verified
     await db.businesses.update_one({"id": business_id}, {"$set": updates})
+    await db.biz_edit_audit.insert_one({
+        "business_id": business_id,
+        "editor": "employee",
+        "editor_ref": x_edit_token[:8] if x_edit_token else None,
+        "changes": {k: v for k, v in updates.items() if k not in {"updated_at", "verified"}},
+        "at": datetime.now(timezone.utc),
+    })
     biz = await db.businesses.find_one({"id": business_id}, PROJECTION)
     return Business(**biz)
 
@@ -937,6 +955,140 @@ async def biz_me(business_id: str, x_edit_token: Optional[str] = Header(None, al
     if not biz:
         raise HTTPException(404, "business not found")
     return Business(**biz)
+
+
+# ---------------- Admin ----------------
+async def require_admin(authorization: Optional[str] = Header(None)) -> dict:
+    u = await require_user(authorization)
+    if (u.get("role") or "user") != "admin":
+        raise HTTPException(403, "admin only")
+    return u
+
+
+@api_router.get("/admin/me")
+async def admin_me(authorization: Optional[str] = Header(None)):
+    u = await require_admin(authorization)
+    return u
+
+
+@api_router.get("/admin/reported-posts")
+async def admin_reported_posts(authorization: Optional[str] = Header(None)):
+    await require_admin(authorization)
+    rows = await db.posts.find({"$or": [{"reports": {"$gt": 0}}, {"hidden": True}]}, PROJECTION).to_list(500)
+    rows.sort(key=lambda r: (r.get("hidden") is not True, -(r.get("reports") or 0)))
+    return rows
+
+
+@api_router.post("/admin/posts/{post_id}/hide")
+async def admin_hide(post_id: str, authorization: Optional[str] = Header(None)):
+    await require_admin(authorization)
+    r = await db.posts.update_one({"id": post_id}, {"$set": {"hidden": True}})
+    if r.matched_count == 0:
+        raise HTTPException(404, "post not found")
+    return {"status": "ok"}
+
+
+@api_router.post("/admin/posts/{post_id}/restore")
+async def admin_restore(post_id: str, authorization: Optional[str] = Header(None)):
+    await require_admin(authorization)
+    r = await db.posts.update_one({"id": post_id}, {"$set": {"hidden": False, "reports": 0}})
+    if r.matched_count == 0:
+        raise HTTPException(404, "post not found")
+    return {"status": "ok"}
+
+
+@api_router.delete("/admin/posts/{post_id}")
+async def admin_delete(post_id: str, authorization: Optional[str] = Header(None)):
+    await require_admin(authorization)
+    r = await db.posts.delete_one({"id": post_id})
+    if r.deleted_count == 0:
+        raise HTTPException(404, "post not found")
+    return {"status": "ok"}
+
+
+@api_router.get("/admin/business-codes")
+async def admin_business_codes(location_id: Optional[str] = None, authorization: Optional[str] = Header(None)):
+    await require_admin(authorization)
+    filt: dict = {}
+    if location_id:
+        filt["location_id"] = location_id
+    rows = await db.businesses.find(filt, PROJECTION).to_list(1000)
+    rows.sort(key=lambda r: (r.get("section") or "", r.get("name_en") or ""))
+    return [
+        {
+            "id": r["id"],
+            "name_en": r.get("name_en"),
+            "name_te": r.get("name_te"),
+            "section": r.get("section"),
+            "category": r.get("category"),
+            "verified": bool(r.get("verified")),
+            "edit_code": r.get("edit_code"),
+        }
+        for r in rows
+    ]
+
+
+@api_router.post("/admin/announcements/broadcast")
+async def admin_broadcast(body: BroadcastBody, authorization: Optional[str] = Header(None)):
+    await require_admin(authorization)
+    return await broadcast(body)
+
+
+@api_router.put("/admin/business/{business_id}", response_model=Business)
+async def admin_edit_business(business_id: str, body: BusinessUpdate, authorization: Optional[str] = Header(None)):
+    admin = await require_admin(authorization)
+    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not updates:
+        raise HTTPException(400, "nothing to update")
+    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+    r = await db.businesses.update_one({"id": business_id}, {"$set": updates})
+    if r.matched_count == 0:
+        raise HTTPException(404, "business not found")
+    await db.biz_edit_audit.insert_one({
+        "business_id": business_id,
+        "editor": "admin",
+        "editor_ref": admin["user_id"],
+        "editor_email": admin.get("email"),
+        "changes": {k: v for k, v in updates.items() if k != "updated_at"},
+        "at": datetime.now(timezone.utc),
+    })
+    biz = await db.businesses.find_one({"id": business_id}, PROJECTION)
+    return Business(**biz)
+
+
+@api_router.get("/admin/business/{business_id}/audit")
+async def admin_business_audit(business_id: str, authorization: Optional[str] = Header(None)):
+    await require_admin(authorization)
+    rows = await db.biz_edit_audit.find({"business_id": business_id}, PROJECTION).to_list(200)
+    rows.sort(key=lambda r: r.get("at") or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+    # Serialize datetime
+    out = []
+    for r in rows:
+        at = r.get("at")
+        out.append({
+            **{k: v for k, v in r.items() if k != "at"},
+            "at": at.isoformat() if isinstance(at, datetime) else at,
+        })
+    return out
+
+
+@api_router.get("/admin/audit")
+async def admin_full_audit(limit: int = 100, authorization: Optional[str] = Header(None)):
+    await require_admin(authorization)
+    rows = await db.biz_edit_audit.find({}, PROJECTION).to_list(limit)
+    rows.sort(key=lambda r: r.get("at") or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+    ids = list({r["business_id"] for r in rows})
+    biz_map = {b["id"]: b for b in await db.businesses.find({"id": {"$in": ids}}, PROJECTION).to_list(1000)}
+    out = []
+    for r in rows:
+        at = r.get("at")
+        b = biz_map.get(r["business_id"])
+        out.append({
+            **{k: v for k, v in r.items() if k != "at"},
+            "at": at.isoformat() if isinstance(at, datetime) else at,
+            "business_name": b.get("name_en") if b else None,
+        })
+    return out
 
 
 # ---------------- Startup ----------------

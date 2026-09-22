@@ -29,7 +29,7 @@ async function setStoredToken(t: string | null) {
   else await SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => {});
 }
 
-export type User = { user_id: string; email: string; name?: string; picture?: string | null };
+export type User = { user_id: string; email: string; name?: string; picture?: string | null; role?: string };
 
 type Ctx = {
   user: User | null;

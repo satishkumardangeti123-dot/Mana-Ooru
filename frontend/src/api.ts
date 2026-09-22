@@ -29,6 +29,7 @@ export type Business = {
   open_now: boolean;
   hours_en?: string | null;
   hours_te?: string | null;
+  verified?: boolean;
 };
 
 export type EmergencyContact = {

@@ -164,6 +164,19 @@ export default function Settings() {
           </Pressable>
         </View>
 
+        {user && user.role === "admin" && (
+          <View style={styles.card}>
+            <Pressable onPress={() => router.push("/admin")} style={styles.employeeBtn} testID="settings-admin-console">
+              <Icon name="shield-crown-outline" size={22} color={colors.brandPrimary} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.employeeTitle}>{t("adminConsole")}</Text>
+                <Text style={styles.helper}>{t("adminConsoleHint")}</Text>
+              </View>
+              <Icon name="chevron-right" size={20} color={colors.muted} />
+            </Pressable>
+          </View>
+        )}
+
         {/* About */}
         <View style={styles.card}>
           <Text style={styles.cardLabel}>{t("aboutApp")}</Text>

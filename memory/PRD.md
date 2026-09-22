@@ -1,37 +1,36 @@
 # Mana Ooru — PRD
 
-## Product
-Mana Ooru ("Our Village") — hyperlocal digital utility for villages in Andhra Pradesh, India. First launch: **Patavala, Kakinada district**. Free to use. English + Telugu.
+Hyperlocal village super-app for Andhra Pradesh, launched in **Patavala, Kakinada district**. Free for residents. English + Telugu.
 
-## Features shipped
-### Core (round 1)
-- Onboarding (Welcome + language toggle → Location → Interests).
-- Home: location pill, brand block, rotating search bar, 8 quick-action tinted cards, live buses card, latest updates.
-- Emergency: 6 red-tinted cards (Ambulance/Police/Fire/Hospitals/Pharmacy/Blood), extra helplines, sticky "CALL 112" CTA, disclaimer.
-- Health directory: chip row + business cards with Open/Closed, distance, hours, Call + Directions.
-- Section screens: Transport, Shops, Services, Government, Agriculture — all seeded with real Patavala-style data.
-- AI-assisted search (Gemini 3 Flash) with rule-based fallback.
-- Settings: EN/TE toggle, location switcher, About.
+## Roles
+- **User** — sees the whole app, posts to the feed with a photo (Google sign-in required to post; anyone can read).
+- **Employee (shop owner)** — enters a 6-digit shop code on `/employee/login`, then edits their own business (timings, phone, hours, open/closed, EN+TE name & address). Owner-edits automatically flip a saffron **Verified** badge on the shop card.
+- **Admin** — `satishkumardangeti123@gmail.com` only. Access to the Admin console with:
+  - **Reports** — moderate reported posts (hide / restore / delete).
+  - **Broadcast** — send village-wide alert (creates an update and pushes to opted-in devices).
+  - **Shop codes** — searchable list of every shop's ID + 6-digit edit code, one-tap copy.
+  - **Override edits** — full audit log; PUT `/api/admin/business/{id}` edits any shop without the code.
 
-### Round 2 (this iteration)
-- **Emergent Google Sign-in** (optional). Session token in `expo-secure-store` / `localStorage`; `/api/auth/session`, `/api/auth/me`, `/api/auth/logout`.
-- **Village Alerts (push notifications)**: opt-in switch in Settings; `getDevicePushTokenAsync` → `/api/register-push` → Emergent SuprSend relay; broadcast endpoint `/api/announcements/broadcast`. Data-only FCM payload; iOS + Android build required to test live.
-- **Voice Search** (Telugu + English): mic on the Home search bar, `expo-audio` recording → `/api/voice/transcribe` (OpenAI Whisper via Emergent LLM key). Detects language and auto-fires the search.
-- **Live Bus Timings**: curated APSRTC-style schedule for Patavala; `/api/buses` returns the next departures with ETA; horizontal card row on Home, refetches every minute.
-- **Community feed** (`/feed`): Google-signed-in users can publish news with an optional photo; anyone can read; "Report" button auto-hides a post after 5 reports. Official announcements appear in the same timeline.
-- **Photo uploads**: `expo-image-picker` → `POST /api/uploads` → Emergent Object Storage → `GET /api/files/{path}` for display.
-- **Business owner / employee editor** (`/employee/login` + `/employee/edit`): each business has a 6-digit `edit_code`. Enter business id + code → 12-hour edit token → edit shop name / subtitle / hours / phone / address / open-now in EN and TE. Live immediately.
+## Feature summary
+### Core
+Onboarding (Welcome + language toggle → Location → Interests), Home (location pill, brand block, rotating search, 8 quick-action cards, live buses row, latest updates), Emergency (6 red cards + helplines + sticky 112 CTA), Health directory (chip row + business cards with Open/Closed, distance, hours, Call, Directions), Section screens (Transport / Shops / Services / Government / Agriculture), AI search (Gemini 3 Flash), Settings (EN/TE, location, About).
+
+### Round 2
+Emergent Google sign-in, opt-in Village Alerts (push), Telugu/English voice search (Whisper), live "Next buses from Patavala" schedule, community feed with image uploads via Emergent Object Storage, per-shop employee editor.
+
+### Round 3 (this iteration)
+Saffron **Verified** badge auto-applied on owner edit, in-post **camera** capture (Take photo / From gallery / Cancel), full **Admin console** (Reports · Broadcast · Shop codes · Audit + admin override edits), single-admin lockdown via `ADMIN_EMAILS`.
 
 ## Tech
-- **Frontend**: Expo SDK 57 / React Native, expo-router, expo-audio, expo-notifications, expo-image, expo-image-picker, expo-secure-store, `@react-native-vector-icons/material-design-icons`, `@tanstack/react-query`, AsyncStorage.
+- **Frontend**: Expo SDK 57 / React Native, expo-router, expo-audio, expo-notifications, expo-image, expo-image-picker (camera + library), expo-secure-store, expo-clipboard, `@react-native-vector-icons/material-design-icons`, `@tanstack/react-query`.
 - **Backend**: FastAPI, Motor, MongoDB, httpx, `emergentintegrations` (LLM + Whisper), Emergent Object Storage via `INTEGRATION_PROXY_URL`.
 - **Integrations**: Emergent Google Auth · Emergent Push (SuprSend) · Emergent Object Storage · Gemini 3 Flash · OpenAI Whisper.
 
 ## Not built (deferred)
-- Admin/moderation console for feed reports.
-- Business-owner onboarding self-service (currently codes are seeded / handed out).
-- Native camera capture from feed (only library picker for now).
+- Public admin invite flow (currently a single hard-coded email).
+- Business-owner onboarding self-service (admin hands out codes).
 - Real APSRTC live feed (schedule is curated).
+- Full analytics on posts / broadcasts.
 
 ## Business enhancement
-Business-owner self-serve editing turns a static village directory into a living platform. Combined with feed posts and village alerts, Mana Ooru becomes the default village-scale super-app and unlocks a future paid "Verified business" tier while staying free for residents.
+The Verified badge + admin-visible audit trail creates the trust surface for a future paid "Verified business" tier while the core app stays free for residents.

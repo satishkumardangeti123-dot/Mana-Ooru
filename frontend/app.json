@@ -11,7 +11,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.emergent.localconnect.wea6zh",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Speak your search in Telugu or English"
+        "NSMicrophoneUsageDescription": "Speak your search in Telugu or English",
+        "NSCameraUsageDescription": "Snap a photo for your community feed post"
       }
     },
     "android": {
@@ -20,8 +21,7 @@
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.emergent.localconnect.wea6zh",
-      "googleServicesFile": "./google-services.json",
-      "permissions": ["RECORD_AUDIO", "POST_NOTIFICATIONS"]
+      "permissions": ["RECORD_AUDIO", "POST_NOTIFICATIONS", "CAMERA"]
     },
     "web": {
       "bundler": "metro",

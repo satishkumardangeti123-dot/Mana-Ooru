@@ -43,6 +43,34 @@ export default function NewPost() {
   }
 
   const pickImage = async () => {
+    const choose = () => new Promise<"camera" | "library" | null>((resolve) => {
+      Alert.alert(t("chooseSource"), "", [
+        { text: t("cancel"), style: "cancel", onPress: () => resolve(null) },
+        { text: t("takePhoto"), onPress: () => resolve("camera") },
+        { text: t("fromGallery"), onPress: () => resolve("library") },
+      ]);
+    });
+    const source = await choose();
+    if (!source) return;
+
+    if (source === "camera") {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert(t("takePhoto"), "Please allow camera access.");
+        return;
+      }
+      const res = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"] as any,
+        quality: 0.7,
+        allowsEditing: false,
+      });
+      if (res.canceled) return;
+      const asset = res.assets[0];
+      setPickedUri(asset.uri);
+      setPickedType(asset.mimeType || "image/jpeg");
+      return;
+    }
+
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
       Alert.alert(t("addPhoto"), "Please allow photo library access.");

@@ -158,6 +158,32 @@ export const dict: Dict = {
   phoneLabel: { en: "Phone", te: "ఫోన్" },
   addressLabel: { en: "Address", te: "చిరునామా" },
   logoutEditor: { en: "Log out", te: "లాగ్ అవుట్" },
+
+  // Verified & photo picker & admin
+  verified: { en: "Verified", te: "ధృవీకరించబడింది" },
+  takePhoto: { en: "Take photo", te: "ఫోటో తీయండి" },
+  fromGallery: { en: "From gallery", te: "గ్యాలరీ నుండి" },
+  chooseSource: { en: "Choose a photo source", te: "ఫోటో మూలాన్ని ఎంచుకోండి" },
+  admin: { en: "Admin", te: "అడ్మిన్" },
+  adminConsole: { en: "Admin console", te: "అడ్మిన్ కన్సోల్" },
+  adminConsoleHint: { en: "Review reports, broadcast alerts, view shop codes", te: "నివేదికలు, ప్రసారాలు, దుకాణ కోడ్‌లు" },
+  reports: { en: "Reports", te: "నివేదికలు" },
+  reportsHint: { en: "Reported posts", te: "నివేదించబడిన పోస్ట్‌లు" },
+  broadcast: { en: "Broadcast", te: "ప్రసారం" },
+  broadcastHint: { en: "Send a village-wide alert", te: "గ్రామం మొత్తం అలర్ట్ పంపండి" },
+  shopCodes: { en: "Shop codes", te: "దుకాణ కోడ్‌లు" },
+  shopCodesHint: { en: "Look up business edit codes", te: "వ్యాపార ఎడిట్ కోడ్‌లను చూడండి" },
+  send: { en: "Send", te: "పంపు" },
+  sent: { en: "Sent to devices", te: "పరికరాలకు పంపబడింది" },
+  broadcastTitle: { en: "Alert title", te: "అలర్ట్ శీర్షిక" },
+  broadcastMessage: { en: "Message", te: "సందేశం" },
+  broadcastTag: { en: "Tag (optional)", te: "ట్యాగ్ (ఐచ్ఛికం)" },
+  hidden: { en: "Hidden", te: "దాచబడింది" },
+  hide: { en: "Hide", te: "దాచు" },
+  restore: { en: "Restore", te: "పునరుద్ధరించండి" },
+  deletePost: { en: "Delete", te: "తొలగించండి" },
+  copy: { en: "Copy", te: "కాపీ" },
+  copied: { en: "Copied", te: "కాపీ చేయబడింది" },
 };
 
 type Ctx = { lang: Lang; setLang: (l: Lang) => void; t: (k: keyof typeof dict) => string; ready: boolean };
